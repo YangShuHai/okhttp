@@ -57,6 +57,7 @@ import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLProtocolException;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
+import junit.framework.TestCase;
 import okhttp3.internal.DoubleInetAddressDns;
 import okhttp3.internal.RecordingOkAuthenticator;
 import okhttp3.internal.Util;
@@ -3383,6 +3384,33 @@ public final class CallTest {
         .assertFailure(FileNotFoundException.class);
 
     assertEquals(1L, called.get());
+  }
+
+  @Test public void clientReadsHeadersDataTrailers() throws IOException {
+    MockResponse mockResponse = new MockResponse()
+        .clearHeaders()
+        .addHeader("h1", "v1")
+        .addHeader("h2", "v2")
+        .setBody("HelloBonjour")
+        .setTrailers(Headers.of("trailers", "boom"));
+    server.enqueue(mockResponse);
+    enableProtocol(Protocol.HTTP_2);
+
+    Call call = client.newCall(new Request.Builder()
+        .url(server.url("/"))
+        .build());
+
+    Response response = call.execute();
+    BufferedSource source = response.body().source();
+
+    assertEquals("v1", response.header("h1"));
+    assertEquals("v2", response.header("h2"));
+
+    assertEquals("Hello", source.readUtf8(5));
+    assertEquals("Bonjour", source.readUtf8(7));
+
+    TestCase.assertTrue(source.exhausted());
+    assertEquals(Headers.of("trailers", "boom"), response.trailers());
   }
 
   private void makeFailingCall() {

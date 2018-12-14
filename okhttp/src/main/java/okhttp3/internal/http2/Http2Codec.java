@@ -31,7 +31,6 @@ import okhttp3.ResponseBody;
 import okhttp3.internal.Internal;
 import okhttp3.internal.Util;
 import okhttp3.internal.connection.StreamAllocation;
-import okhttp3.internal.duplex.HeadersListener;
 import okhttp3.internal.http.HttpCodec;
 import okhttp3.internal.http.HttpHeaders;
 import okhttp3.internal.http.RealResponseBody;
@@ -72,6 +71,7 @@ public final class Http2Codec implements HttpCodec {
       HOST,
       KEEP_ALIVE,
       PROXY_CONNECTION,
+      // TODO: instead of skipping 'TE' unconditionally, only skip it if its value isn't 'trailers'.
       TE,
       TRANSFER_ENCODING,
       ENCODING,
@@ -124,11 +124,6 @@ public final class Http2Codec implements HttpCodec {
   public void writeRequestHeaders(List<Header> headers) throws IOException {
     if (stream == null) throw new IllegalStateException("stream == null");
     stream.writeHeaders(headers, true);
-  }
-
-  public void setHeadersListener(HeadersListener headersListener) {
-    if (stream == null) throw new IllegalStateException("stream == null");
-    stream.setHeadersListener(headersListener);
   }
 
   @Override public void flushRequest() throws IOException {
@@ -198,6 +193,10 @@ public final class Http2Codec implements HttpCodec {
     long contentLength = HttpHeaders.contentLength(response);
     Source source = new StreamFinishingSource(stream.getSource());
     return new RealResponseBody(contentType, contentLength, Okio.buffer(source));
+  }
+
+  @Override public Headers trailers() throws IOException {
+    return stream.trailers();
   }
 
   @Override public void cancel() {
